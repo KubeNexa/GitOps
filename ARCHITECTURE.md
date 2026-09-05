@@ -82,14 +82,14 @@ task once the platform is deployed.
 
 ## Services
 
-| Service | Language | Framework | Port | Database | README |
-|---|---|---|---|---|---|
-| API Gateway | Node.js | Express | 3000 | — (stateless) | [api-gateway/README.md](api-gateway/README.md) |
-| User Service | Java 21 | Spring Boot 3.3 | 8081 | PostgreSQL | [user-service/README.md](user-service/README.md) |
-| Product Service | Python 3.12 | FastAPI | 8000 | PostgreSQL | [product-service/README.md](product-service/README.md) |
-| Order Service | Go | Gin | 8082 | PostgreSQL | [order-service/README.md](order-service/README.md) |
-| Payment Service | C# / .NET 8 | ASP.NET Core | 8083 | PostgreSQL | [payment-service/README.md](payment-service/README.md) |
-| Notification Service | TypeScript | Express | 8084 | MongoDB | [notification-service/README.md](notification-service/README.md) |
+| Service | Language | Framework | Port | Database | 
+|---|---|---|---|---|
+| API Gateway | Node.js | Express | 3000 | — (stateless) | 
+| User Service | Java 21 | Spring Boot 3.3 | 8081 | PostgreSQL | 
+| Product Service | Python 3.12 | FastAPI | 8000 | PostgreSQL | 
+| Order Service | Go | Gin | 8082 | PostgreSQL | 
+| Payment Service | C# / .NET 8 | ASP.NET Core | 8083 | PostgreSQL | 
+| Notification Service | TypeScript | Express | 8084 | MongoDB | 
 
 Every service README documents: language/framework/runtime version, build
 tool, exact build/test/run commands, port, environment variables,
@@ -172,14 +172,6 @@ application team's:
 - Terraform, Ansible, Argo CD config
 - AWS infrastructure code
 - Prometheus/Grafana config
-
-## Failure scenarios
-
-See [docs/FAILURE_SCENARIOS.md](docs/FAILURE_SCENARIOS.md) for the full
-catalog of production incidents this platform is deliberately built to let
-you reproduce — database outages, downstream timeouts, bad config, broken
-health checks, and more — mapped to exactly which service, which env var,
-and which expected symptom.
 
 ## Suggested next steps for the DevOps handoff
 
