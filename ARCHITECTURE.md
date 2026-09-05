@@ -80,6 +80,50 @@ provider integration are complete and independently testable, but nothing
 currently calls it automatically. That's a reasonable first integration
 task once the platform is deployed.
 
+## Service dependencies
+
+- **frontend** depends on **api-gateway** only. It has no knowledge of
+  the other five services — that's the entire point of having a gateway.
+- **api-gateway** depends on **user-service**, **product-service**, and
+  **order-service**. It does not call payment-service or
+  notification-service directly.
+- **order-service** depends on **user-service**, **product-service**,
+  *and* **payment-service** — the one service with three outbound
+  dependencies, which makes it the most consequential single point of
+  failure in the request path for placing an order.
+- **payment-service**'s only outbound dependency is external (a card
+  gateway, currently `simulated`).
+- **notification-service** has no dependents yet (see above) and no
+  outbound dependencies of its own beyond its external
+  email/SMS providers (also `simulated` by default).
+
+## Placing an order, end to end
+
+Worth internalizing this trace, since most realistic failure scenarios
+are just "one step in it breaks":
+
+1. A logged-in customer clicks checkout in **frontend**. The browser sends
+   `POST /api/v1/orders` to **api-gateway** with a JWT from login.
+2. **api-gateway** verifies the JWT's signature locally (no call to
+   user-service needed for this — it and user-service just share a
+   secret) and forwards the request to **order-service**.
+3. **order-service**, before writing anything: calls **user-service** to
+   confirm the user exists and is active, then calls **product-service**
+   once per line item to resolve the *real* current price/stock — the
+   price the client sent is never trusted, only used to know what to ask
+   about.
+4. If both check out, **order-service** writes the order to its own
+   database (`shopstream_orders`) as `PENDING`, then calls
+   **payment-service** to charge the total, sending the order's own ID as
+   an `Idempotency-Key` so a retried call can never double-charge.
+5. **payment-service** processes the charge (in `simulated` mode: a
+   deterministic approve/decline, no real external call) and records the
+   result in its own database (`shopstream_payments`).
+6. **order-service** flips the order to `CONFIRMED` or `FAILED` and
+   returns it back through api-gateway to the frontend.
+7. **What should happen next, but doesn't yet**: a confirmation email via
+   notification-service. Nothing in step 6 calls it — see the note above.
+
 ## Services
 
 | Service | Language | Framework | Port | Database | 
