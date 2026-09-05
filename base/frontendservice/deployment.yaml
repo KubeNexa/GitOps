@@ -23,17 +23,14 @@ spec:
       labels:
         app: frontend
     spec:
-      # runAsNonRoot only, deliberately no runAsUser/runAsGroup number
-      # here - unlike the other six services, frontend has no Dockerfile
-      # yet, so there's no built image to actually check a real UID
-      # against (see how every other service's Dockerfile review in this
-      # project involved running `id` inside the built image before
-      # writing this file - skipping that step here and inventing a
-      # number would be a guess dressed up as a fact). Fill in a real
-      # runAsUser once the Dockerfile exists and you've verified it the
-      # same way.
+      # 101/101 is nginx-unprivileged's real built-in "nginx" user -
+      # verified by building the image and running `id` inside it, same
+      # as every other service, not assumed.
       securityContext:
         runAsNonRoot: true
+        runAsUser: 101
+        runAsGroup: 101
+        fsGroup: 101
 
       terminationGracePeriodSeconds: 15
 
@@ -44,14 +41,12 @@ spec:
 
           ports:
             - name: http
-              containerPort: 80
+              containerPort: 8080
               protocol: TCP
-          # Port 80 assumes the eventual Dockerfile serves the Vite
-          # build's static dist/ output via something like nginx - the
-          # standard pattern for a production SPA container, and the
-          # overwhelmingly likely choice, but still an assumption until
-          # that Dockerfile exists. It is NOT 5173 - that's the Vite dev
-          # server, never what a production image should run.
+          # 8080, not 80: nginx-unprivileged (the base image frontend's
+          # Dockerfile actually uses) can't bind to 80 without root, and
+          # the whole point of that image is running as non-root. Also
+          # not 5173 - that's the Vite dev server, never what runs here.
 
           # No envFrom/env here - unlike every backend service, this app
           # has no runtime configuration. VITE_API_BASE_URL is a
@@ -94,13 +89,12 @@ spec:
             capabilities:
               drop: ["ALL"]
 
-          # readOnlyRootFilesystem + nginx (the near-certain base image
-          # for serving a static SPA) is a known landmine on its own:
-          # stock nginx writes to /var/cache/nginx, /var/run, and /tmp
-          # even just to start, and crashes immediately without them.
-          # These emptyDir mounts keep the security setting AND a
-          # working nginx - remove/adjust if the eventual Dockerfile
-          # uses a different base image with different write paths.
+          # readOnlyRootFilesystem + nginx is a known landmine: nginx
+          # writes to /var/cache/nginx, /var/run, and /tmp even just to
+          # start, and crashes immediately without them. Verified this
+          # exact combination (--read-only + these three paths writable)
+          # actually works against the real built image before writing
+          # this, not just assumed from how nginx generally behaves.
           volumeMounts:
             - name: nginx-cache
               mountPath: /var/cache/nginx
