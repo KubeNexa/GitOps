@@ -1,0 +1,108 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: payment-service
+  labels:
+    app: payment-service
+    tier: backend
+spec:
+  replicas: 2
+
+  selector:
+    matchLabels:
+      app: payment-service
+
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+
+  template:
+    metadata:
+      labels:
+        app: payment-service
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1654
+        runAsGroup: 1654
+        fsGroup: 1654
+      # Verified, not the commonly-cited $APP_UID=64198 default some
+      # .NET docs quote - the actual value baked into this specific
+      # image build. Kubernetes YAML can't reference the $APP_UID env
+      # var the Dockerfile uses, so this has to be the literal number,
+      # and it has to be re-checked if the base image is ever bumped.
+
+      terminationGracePeriodSeconds: 15
+
+      containers:
+        - name: payment-service
+          image: manoj_s/payment-service:REPLACE_WITH_IMAGE_TAG
+          imagePullPolicy: IfNotPresent
+
+          ports:
+            - name: http
+              containerPort: 8083
+              protocol: TCP
+
+          envFrom:
+            - configMapRef:
+                name: payment-service-config
+
+          env:
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: payment-service-secrets
+                  key: db-password
+
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+
+          resources:
+            requests:
+              cpu: 200m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 384Mi
+
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: payment-service-config
+data:
+  ASPNETCORE_URLS: "http://+:8083"
+  ASPNETCORE_ENVIRONMENT: "Production"
+  SHUTDOWN_TIMEOUT_SECONDS: "10"
+  DB_HOST: "REPLACE_WITH_PAYMENT_DB_HOST"
+  DB_PORT: "5432"
+  DB_NAME: "shopstream_payments"
+  DB_USER: "shopstream"
+  DB_CONNECT_TIMEOUT_SECONDS: "5"
+  Gateway__Mode: "simulated"
+  Gateway__TimeoutSeconds: "5"
+  Gateway__RetryAttempts: "2"
+  Gateway__DeclineThresholdCents: "1000000"
