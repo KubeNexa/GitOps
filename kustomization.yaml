@@ -8,3 +8,4 @@ resources:
   - order-service/app.yaml
   - payment-service/app.yaml
   - notification-service/app.yaml
+  - frontend/app.yaml
