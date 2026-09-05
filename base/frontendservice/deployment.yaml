@@ -1,0 +1,118 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frontend
+  labels:
+    app: frontend
+    tier: frontend
+spec:
+  replicas: 2
+
+  selector:
+    matchLabels:
+      app: frontend
+
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+
+  template:
+    metadata:
+      labels:
+        app: frontend
+    spec:
+      # runAsNonRoot only, deliberately no runAsUser/runAsGroup number
+      # here - unlike the other six services, frontend has no Dockerfile
+      # yet, so there's no built image to actually check a real UID
+      # against (see how every other service's Dockerfile review in this
+      # project involved running `id` inside the built image before
+      # writing this file - skipping that step here and inventing a
+      # number would be a guess dressed up as a fact). Fill in a real
+      # runAsUser once the Dockerfile exists and you've verified it the
+      # same way.
+      securityContext:
+        runAsNonRoot: true
+
+      terminationGracePeriodSeconds: 15
+
+      containers:
+        - name: frontend
+          image: manoj_s/frontend:REPLACE_WITH_IMAGE_TAG
+          imagePullPolicy: IfNotPresent
+
+          ports:
+            - name: http
+              containerPort: 80
+              protocol: TCP
+          # Port 80 assumes the eventual Dockerfile serves the Vite
+          # build's static dist/ output via something like nginx - the
+          # standard pattern for a production SPA container, and the
+          # overwhelmingly likely choice, but still an assumption until
+          # that Dockerfile exists. It is NOT 5173 - that's the Vite dev
+          # server, never what a production image should run.
+
+          # No envFrom/env here - unlike every backend service, this app
+          # has no runtime configuration. VITE_API_BASE_URL is a
+          # build-time value baked into the static JS bundle when the
+          # image is built (see frontend/README.md's "build-time vs
+          # runtime" note) - setting it as a container env var here would
+          # do nothing at all, since nothing at runtime reads
+          # process.env in a static SPA. Changing which api-gateway this
+          # points at means rebuilding the image, not editing this file.
+
+          livenessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+
+          # readOnlyRootFilesystem + nginx (the near-certain base image
+          # for serving a static SPA) is a known landmine on its own:
+          # stock nginx writes to /var/cache/nginx, /var/run, and /tmp
+          # even just to start, and crashes immediately without them.
+          # These emptyDir mounts keep the security setting AND a
+          # working nginx - remove/adjust if the eventual Dockerfile
+          # uses a different base image with different write paths.
+          volumeMounts:
+            - name: nginx-cache
+              mountPath: /var/cache/nginx
+            - name: nginx-run
+              mountPath: /var/run
+            - name: tmp
+              mountPath: /tmp
+
+      volumes:
+        - name: nginx-cache
+          emptyDir: {}
+        - name: nginx-run
+          emptyDir: {}
+        - name: tmp
+          emptyDir: {}
