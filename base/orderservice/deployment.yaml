@@ -1,0 +1,112 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: order-service
+  labels:
+    app: order-service
+    tier: backend
+spec:
+  replicas: 2
+
+  selector:
+    matchLabels:
+      app: order-service
+
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+
+  template:
+    metadata:
+      labels:
+        app: order-service
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 100
+        runAsGroup: 101
+        fsGroup: 101
+      # uid 100 / gid 101, not the same number - confirmed by actually
+      # running `id` inside the built image, not assumed. Alpine's
+      # `adduser -S` and `addgroup -S` don't guarantee matching uid/gid
+      # numbers the way Debian's tools tend to.
+
+      terminationGracePeriodSeconds: 15
+
+      containers:
+        - name: order-service
+          image: manoj_s/order-service:REPLACE_WITH_IMAGE_TAG
+          imagePullPolicy: IfNotPresent
+
+          ports:
+            - name: http
+              containerPort: 8082
+              protocol: TCP
+
+          envFrom:
+            - configMapRef:
+                name: order-service-config
+
+          env:
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: order-service-secrets
+                  key: db-password
+
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+
+          resources:
+            requests:
+              cpu: 150m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: order-service-config
+data:
+  SERVER_PORT: "8082"
+  LOG_LEVEL: "info"
+  ENVIRONMENT: "production"
+  SHUTDOWN_TIMEOUT_SECONDS: "10"
+  DB_HOST: "REPLACE_WITH_ORDER_DB_HOST"
+  DB_PORT: "5432"
+  DB_NAME: "shopstream_orders"
+  DB_USER: "shopstream"
+  DB_MAX_OPEN_CONNS: "10"
+  DB_MAX_IDLE_CONNS: "5"
+  DB_CONNECT_TIMEOUT_SECONDS: "5"
+  USER_SERVICE_URL: "http://user-service:8081"
+  PRODUCT_SERVICE_URL: "http://product-service:8000"
+  PAYMENT_SERVICE_URL: "http://payment-service:8083"
+  HTTP_CLIENT_TIMEOUT_SECONDS: "3"
+  HTTP_CLIENT_RETRY_ATTEMPTS: "2"
+  HTTP_CLIENT_RETRY_BACKOFF_MS: "200"
